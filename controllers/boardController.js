@@ -1,0 +1,111 @@
+const Board = require("../models/Board");
+const User = require("../models/User");
+
+// POST /api/boards
+const createBoard = async (req, res) => {
+  try {
+    const board = await Board.create({
+      name: req.body.name,
+      members: [{ user: req.user._id, role: "admin" }],
+    });
+    res.status(201).json(board);
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// GET /api/boards
+const getBoards = async (req, res) => {
+  try {
+    const boards = await Board.find({ "members.user": req.user._id }).populate(
+      "members.user",
+      "username email"
+    );
+    res.json(boards);
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// POST /api/boards/:id/invite  (protected by requireBoardRole(["admin"]))
+const inviteUser = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const board = req.board; // from middleware
+
+    // Check if user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if already a member
+    const alreadyMember = board.members.some(
+      (m) => m.user && m.user._id.toString() === userId
+    );
+    if (alreadyMember)
+      return res.status(400).json({ message: "User already a member" });
+
+    // Add user
+    board.members.push({ user: user._id, role: "member" });
+    await board.save();
+
+    res.json(board);
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// DELETE /api/boards/:id/remove  (protected by requireBoardRole(["admin"]))
+const removeUser = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const board = req.board;
+
+    // Prevent removing the last admin (optional check)
+    const memberToRemove = board.members.find(
+      (m) => m.user._id.toString() === userId
+    );
+    if (!memberToRemove)
+      return res.status(404).json({ message: "User not a member" });
+
+    // optional safety: ensure at least one admin remains
+    if (memberToRemove.role === "admin") {
+      const adminsCount = board.members.filter(
+        (m) => m.role === "admin"
+      ).length;
+      if (adminsCount <= 1) {
+        return res
+          .status(400)
+          .json({ message: "Cannot remove the last admin" });
+      }
+    }
+
+    board.members = board.members.filter(
+      (m) => m.user._id.toString() !== userId
+    );
+    await board.save();
+    res.json(board);
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// DELETE /api/boards/:id  (protected by requireBoardRole(["admin"]))
+const deleteBoard = async (req, res) => {
+  try {
+    const board = req.board;
+    await board.deleteOne();
+    res.json({ message: "Board deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+module.exports = {
+  createBoard,
+  getBoards,
+  inviteUser,
+  removeUser,
+  deleteBoard,
+};
