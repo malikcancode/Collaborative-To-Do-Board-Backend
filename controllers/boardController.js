@@ -102,10 +102,39 @@ const deleteBoard = async (req, res) => {
   }
 };
 
+// POST /api/boards/:id/lists
+const addList = async (req, res) => {
+  try {
+    const board = req.board;
+    const { name } = req.body;
+    board.lists.push({ name });
+    await board.save();
+    res.status(201).json(board.lists[board.lists.length - 1]);
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// DELETE /api/boards/:id/lists/:listId
+const deleteList = async (req, res) => {
+  try {
+    const board = req.board;
+    board.lists = board.lists.filter(
+      (list) => list._id.toString() !== req.params.listId
+    );
+    await board.save();
+    res.json({ message: "List deleted" });
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 module.exports = {
   createBoard,
   getBoards,
   inviteUser,
   removeUser,
   deleteBoard,
+  addList,
+  deleteList,
 };

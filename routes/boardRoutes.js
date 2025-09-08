@@ -5,6 +5,8 @@ const {
   inviteUser,
   removeUser,
   deleteBoard,
+  addList,
+  deleteList,
 } = require("../controllers/boardController");
 const { protect } = require("../middleware/authMiddleware");
 const requireBoardRole = require("../middleware/roleMiddleware");
@@ -19,7 +21,12 @@ router.post("/:id/invite", protect, requireBoardRole(["admin"]), inviteUser);
 router.delete("/:id/remove", protect, requireBoardRole(["admin"]), removeUser);
 router.delete("/:id", protect, requireBoardRole(["admin"]), deleteBoard);
 
-// Example: member or admin can add tasks (placeholder):
-// router.post("/:id/tasks", protect, requireBoardRole(["admin","member"]), addTask);
+router.post("/:id/lists", protect, requireBoardRole(["admin"]), addList);
+router.delete(
+  "/:id/lists/:listId",
+  protect,
+  requireBoardRole(["admin"]),
+  deleteList
+);
 
 module.exports = router;

@@ -9,6 +9,15 @@ const boardSchema = new mongoose.Schema(
         role: { type: String, enum: ["admin", "member"], default: "member" },
       },
     ],
+    lists: [
+      {
+        _id: {
+          type: mongoose.Schema.Types.ObjectId,
+          default: () => new mongoose.Types.ObjectId(),
+        },
+        name: { type: String, required: true },
+      },
+    ],
   },
   { timestamps: true }
 );
