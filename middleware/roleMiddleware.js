@@ -1,4 +1,3 @@
-// middleware/roleMiddleware.js
 const Board = require("../models/Board");
 
 /**
@@ -25,6 +24,10 @@ const requireBoardRole = (allowedRoles = []) => {
 
       if (!membership)
         return res.status(403).json({ message: "Not a member of this board" });
+
+      // console.log("Board members:", board.members);
+      // console.log("Current user:", req.user._id);
+      // console.log("Membership found:", membership);
 
       if (!allowedRoles.includes(membership.role)) {
         return res

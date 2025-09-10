@@ -9,17 +9,14 @@ const taskSchema = new mongoose.Schema(
     },
     listId: {
       type: mongoose.Schema.Types.ObjectId,
+      ref: "List",
       required: true,
     },
     title: { type: String, required: true },
     description: { type: String },
-    status: {
-      type: String,
-      enum: ["To Do", "In Progress", "Done"],
-      default: "To Do",
-    },
     deadline: { type: Date },
-    attachment: { type: String }, // optional, store file URL or path
+    attachment: { type: String },
+    position: { type: Number, required: true }, // position inside the list
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

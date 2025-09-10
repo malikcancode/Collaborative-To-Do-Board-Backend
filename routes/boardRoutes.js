@@ -7,6 +7,7 @@ const {
   deleteBoard,
   addList,
   deleteList,
+  updateListsOrder,
 } = require("../controllers/boardController");
 const { protect } = require("../middleware/authMiddleware");
 const requireBoardRole = require("../middleware/roleMiddleware");
@@ -27,6 +28,13 @@ router.delete(
   protect,
   requireBoardRole(["admin"]),
   deleteList
+);
+
+router.put(
+  "/:id/lists/order",
+  protect,
+  requireBoardRole(["admin"]),
+  updateListsOrder
 );
 
 module.exports = router;

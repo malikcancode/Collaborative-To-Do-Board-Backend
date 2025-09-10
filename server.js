@@ -3,27 +3,31 @@ const dotenv = require("dotenv");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const connectDB = require("./config/db");
-
 dotenv.config();
 connectDB();
 
 const app = express();
-
-// Middleware
 app.use(express.json());
 app.use(cookieParser());
-
-// ✅ Enable CORS for all origins
 app.use(
   cors({
-    origin: "http://localhost:5173", // frontend origin
-    credentials: true, // allow cookies/auth headers
+    origin: "http://localhost:5173",
+    credentials: true,
   })
 );
-// Routes
+
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/boards", require("./routes/boardRoutes"));
 app.use("/api/boards/:id/tasks", require("./routes/taskRoutes"));
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const server = app.listen(PORT, () =>
+  console.log(`Server running on port ${PORT}`)
+);
+
+// --- Socket.IO Integration ---
+const setupSocket = require("./socket");
+const io = setupSocket(server);
+
+// Make io accessible in routes/controllers if needed
+app.set("io", io);

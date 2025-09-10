@@ -107,10 +107,14 @@ const addList = async (req, res) => {
   try {
     const board = req.board;
     const { name } = req.body;
+    if (!board.lists) board.lists = []; // Ensure lists array exists
     board.lists.push({ name });
     await board.save();
+
+    await board.populate("members.user", "username email");
     res.status(201).json(board.lists[board.lists.length - 1]);
   } catch (error) {
+    console.error(error); // Add this for better debugging!
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -129,6 +133,31 @@ const deleteList = async (req, res) => {
   }
 };
 
+const updateListsOrder = async (req, res) => {
+  try {
+    const board = req.board;
+    const { lists } = req.body; // Array of list objects (with _id and name)
+
+    // Validate: lists should contain all current lists, just reordered
+    if (!Array.isArray(lists) || lists.length !== board.lists.length) {
+      return res.status(400).json({ message: "Invalid lists array" });
+    }
+
+    // Optionally: check all IDs match
+    const currentIds = board.lists.map((l) => l._id.toString()).sort();
+    const newIds = lists.map((l) => l._id.toString()).sort();
+    if (JSON.stringify(currentIds) !== JSON.stringify(newIds)) {
+      return res.status(400).json({ message: "List IDs mismatch" });
+    }
+
+    board.lists = lists;
+    await board.save();
+    res.json(board.lists);
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 module.exports = {
   createBoard,
   getBoards,
@@ -137,4 +166,5 @@ module.exports = {
   deleteBoard,
   addList,
   deleteList,
+  updateListsOrder,
 };
