@@ -21,6 +21,11 @@ router.put(
 );
 
 // Only Admin can delete task
-router.delete("/:taskId", protect, requireBoardRole(["admin"]), deleteTask);
+router.delete(
+  "/:taskId",
+  protect,
+  requireBoardRole(["admin", "member"]),
+  deleteTask
+);
 
 module.exports = router;

@@ -1,7 +1,12 @@
 const mongoose = require("mongoose");
 
 const ListSchema = new mongoose.Schema({
-  name: { type: String, required: true },
+  name: String,
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+  },
 });
 
 const boardSchema = new mongoose.Schema(

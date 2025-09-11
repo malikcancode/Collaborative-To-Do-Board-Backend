@@ -66,11 +66,19 @@ const updateTask = async (req, res) => {
   try {
     const { title, description, deadline, attachment, listId, position } =
       req.body;
+    req.body;
 
     const task = await Task.findOne({
       _id: req.params.taskId,
       boardId: req.board._id,
     });
+
+    // const isAdmin = req.boardMembership.role === "admin";
+    // if (!isAdmin && task.createdBy.toString() !== req.user._id.toString()) {
+    //   return res
+    //     .status(403)
+    //     .json({ message: "You can only update your own tasks" });
+    // }
 
     if (!task) return res.status(404).json({ message: "Task not found" });
 
@@ -151,6 +159,14 @@ const deleteTask = async (req, res) => {
 
     if (!task) return res.status(404).json({ message: "Task not found" });
 
+    const isAdmin = req.boardMembership.role === "admin";
+    const isCreator = task.createdBy.toString() === req.user._id.toString();
+
+    if (!isAdmin && !isCreator) {
+      return res
+        .status(403)
+        .json({ message: "Only the creator or an admin can delete this task" });
+    }
     await task.deleteOne();
     res.json({ message: "Task deleted successfully" });
 

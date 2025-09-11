@@ -22,11 +22,17 @@ router.post("/:id/invite", protect, requireBoardRole(["admin"]), inviteUser);
 router.delete("/:id/remove", protect, requireBoardRole(["admin"]), removeUser);
 router.delete("/:id", protect, requireBoardRole(["admin"]), deleteBoard);
 
-router.post("/:id/lists", protect, requireBoardRole(["admin"]), addList);
+router.post(
+  "/:id/lists",
+  protect,
+  requireBoardRole(["admin", "member"]),
+  addList
+);
+
 router.delete(
   "/:id/lists/:listId",
   protect,
-  requireBoardRole(["admin"]),
+  requireBoardRole(["admin", "member"]),
   deleteList
 );
 

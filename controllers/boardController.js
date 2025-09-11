@@ -1,5 +1,6 @@
 const Board = require("../models/Board");
 const User = require("../models/User");
+const nodemailer = require("nodemailer");
 
 // POST /api/boards
 const createBoard = async (req, res) => {
@@ -30,25 +31,41 @@ const getBoards = async (req, res) => {
 // POST /api/boards/:id/invite  (protected by requireBoardRole(["admin"]))
 const inviteUser = async (req, res) => {
   try {
-    const { userId } = req.body;
+    const { email } = req.body;
     const board = req.board; // from middleware
 
     // Check if user exists
-    const user = await User.findById(userId);
+    const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-
     // Check if already a member
     const alreadyMember = board.members.some(
-      (m) => m.user && m.user._id.toString() === userId
+      (m) => m.user && m.user._id.toString() === user._id.toString()
     );
     if (alreadyMember)
       return res.status(400).json({ message: "User already a member" });
 
-    // Add user
     board.members.push({ user: user._id, role: "member" });
     await board.save();
+
+    // Send invitation email
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.MAIL_USER,
+        pass: process.env.MAIL_PASS,
+      },
+    });
+
+    const mailOptions = {
+      from: process.env.MAIL_USER,
+      to: user.email, // or use 'email' from req.body if provided
+      subject: `Invitation to join board: ${board.name}`,
+      text: `Hello ${user.username},\n\nYou have been invited to join the board "${board.name}".\n\nLogin to view the board.\n`,
+    };
+
+    await transporter.sendMail(mailOptions);
 
     res.json(board);
   } catch (error) {
@@ -107,11 +124,25 @@ const addList = async (req, res) => {
   try {
     const board = req.board;
     const { name } = req.body;
-    if (!board.lists) board.lists = []; // Ensure lists array exists
-    board.lists.push({ name });
+
+    const allowedRoles = ["admin", "member"];
+    if (!allowedRoles.includes(req.boardMembership.role)) {
+      return res.status(403).json({ message: "Not allowed to create list" });
+    }
+
+    if (!board.lists) board.lists = [];
+    board.lists.push({ name, createdBy: req.user._id });
     await board.save();
 
     await board.populate("members.user", "username email");
+    const newList = board.lists[board.lists.length - 1];
+
+    // Emit socket event for new list
+    const io = req.app.get("io");
+    io.to(board._id.toString()).emit("listChanged", {
+      type: "created",
+      list: newList,
+    });
     res.status(201).json(board.lists[board.lists.length - 1]);
   } catch (error) {
     console.error(error); // Add this for better debugging!
@@ -123,13 +154,36 @@ const addList = async (req, res) => {
 const deleteList = async (req, res) => {
   try {
     const board = req.board;
-    board.lists = board.lists.filter(
-      (list) => list._id.toString() !== req.params.listId
-    );
+    const listId = req.params.listId;
+
+    const list = board.lists.id(listId);
+    if (!list) {
+      return res.status(404).json({ message: "List not found" });
+    }
+
+    const isAdmin = req.boardMembership.role === "admin";
+    const isCreator = list.createdBy.toString() === req.user._id.toString();
+
+    if (!isAdmin && !isCreator) {
+      return res
+        .status(403)
+        .json({ message: "Only the creator or an admin can delete this list" });
+    }
+
+    board.lists = board.lists.filter((l) => l._id.toString() !== listId);
     await board.save();
+
+    // Emit socket event for deleted list
+    const io = req.app.get("io");
+    io.to(board._id.toString()).emit("listChanged", {
+      type: "deleted",
+      listId,
+    });
+
     res.json({ message: "List deleted" });
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    console.error("Error in deleteList:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 

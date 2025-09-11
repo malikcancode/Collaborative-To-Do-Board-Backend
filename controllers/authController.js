@@ -14,11 +14,13 @@ const register = async (req, res) => {
 
     if (user) {
       const token = generateToken(res, user._id);
-      res.status(201).json({
-        _id: user._id,
-        username: user.username,
-        email: user.email,
-        token, // also send token if frontend wants localStorage option
+      res.json({
+        token,
+        user: {
+          _id: user._id,
+          username: user.username,
+          email: user.email,
+        },
       });
     }
   } catch (error) {
@@ -37,10 +39,12 @@ const login = async (req, res) => {
     if (user && (await user.matchPassword(password))) {
       const token = generateToken(res, user._id);
       res.json({
-        _id: user._id,
-        username: user.username,
-        email: user.email,
         token,
+        user: {
+          _id: user._id,
+          username: user.username,
+          email: user.email,
+        },
       });
     } else {
       res.status(401).json({ message: "Invalid email or password" });
