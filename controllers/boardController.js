@@ -1,16 +1,29 @@
 const Board = require("../models/Board");
 const User = require("../models/User");
 const nodemailer = require("nodemailer");
+const Task = require("../models/Task");
 
-// POST /api/boards
+// controllers/boardController.js
+
 const createBoard = async (req, res) => {
   try {
+    // Check if this user already belongs to a board
+    const existing = await Board.findOne({ "members.user": req.user._id });
+    if (existing) {
+      return res
+        .status(403)
+        .json({ message: "Members cannot create new boards" });
+    }
+
+    // Create board & assign user as admin
     const board = await Board.create({
       name: req.body.name,
       members: [{ user: req.user._id, role: "admin" }],
     });
+
     res.status(201).json(board);
   } catch (error) {
+    console.error("Error creating board:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -48,6 +61,11 @@ const inviteUser = async (req, res) => {
 
     board.members.push({ user: user._id, role: "member" });
     await board.save();
+    await board.populate("members.user", "username email");
+    await board.populate("lists.createdBy", "username email");
+
+    const io = req.app.get("io");
+    io.to(user._id.toString()).emit("boardInvited", board);
 
     // Send invitation email
     const transporter = nodemailer.createTransport({
@@ -108,12 +126,43 @@ const removeUser = async (req, res) => {
   }
 };
 
+// DELETE /api/boards/:id/exit (for members to leave board themselves)
+const exitBoard = async (req, res) => {
+  try {
+    const board = req.board;
+
+    // only allow members (not admins) to exit themselves
+    if (req.boardMembership.role === "admin") {
+      return res.status(403).json({
+        message:
+          "Admins cannot exit directly. Delete the board or transfer admin role first.",
+      });
+    }
+
+    // remove current user
+    board.members = board.members.filter(
+      (m) => m.user._id.toString() !== req.user._id.toString()
+    );
+    await board.save();
+
+    res.json({ message: "You have exited the board", boardId: board._id });
+  } catch (error) {
+    console.error("Error in exitBoard:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 // DELETE /api/boards/:id  (protected by requireBoardRole(["admin"]))
 const deleteBoard = async (req, res) => {
   try {
     const board = req.board;
+    if (!board) {
+      return res.status(404).json({ message: "Board not found" });
+    }
+    // Delete all tasks associated with this board
+    await Task.deleteMany({ board: board._id });
     await board.deleteOne();
-    res.json({ message: "Board deleted successfully" });
+    res.json({ message: "Board and related tasks deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: "Server error" });
   }
@@ -221,4 +270,5 @@ module.exports = {
   addList,
   deleteList,
   updateListsOrder,
+  exitBoard,
 };

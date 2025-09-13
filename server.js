@@ -26,8 +26,6 @@ const server = app.listen(PORT, () =>
 );
 
 // --- Socket.IO Integration ---
-const setupSocket = require("./socket");
+const { setupSocket } = require("./socket");
 const io = setupSocket(server);
-
-// Make io accessible in routes/controllers if needed
 app.set("io", io);

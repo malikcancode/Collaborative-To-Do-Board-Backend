@@ -8,6 +8,7 @@ const {
   addList,
   deleteList,
   updateListsOrder,
+  exitBoard,
 } = require("../controllers/boardController");
 const { protect } = require("../middleware/authMiddleware");
 const requireBoardRole = require("../middleware/roleMiddleware");
@@ -19,6 +20,12 @@ router.get("/", protect, getBoards);
 
 // Admin-only actions on a board:
 router.post("/:id/invite", protect, requireBoardRole(["admin"]), inviteUser);
+router.delete(
+  "/:id/exit",
+  protect,
+  requireBoardRole(["admin", "member"]),
+  exitBoard
+);
 router.delete("/:id/remove", protect, requireBoardRole(["admin"]), removeUser);
 router.delete("/:id", protect, requireBoardRole(["admin"]), deleteBoard);
 

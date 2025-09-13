@@ -1,7 +1,9 @@
 const { Server } = require("socket.io");
 
+let io;
+
 function setupSocket(server) {
-  const io = new Server(server, {
+  io = new Server(server, {
     cors: {
       origin: "http://localhost:5173",
       credentials: true,
@@ -9,24 +11,36 @@ function setupSocket(server) {
   });
 
   io.on("connection", (socket) => {
-    socket.on("joinBoard", (boardId) => {
-      socket.join(boardId);
+    // Join user-specific room
+    socket.on("registerUser", (userId) => {
+      if (userId) socket.join(userId.toString());
     });
 
-    socket.on("taskChanged", ({ boardId, type, task, taskId }) => {
-      if (type === "deleted") {
-        io.to(boardId).emit("taskChanged", { type, task: undefined, taskId });
-      } else {
-        io.to(boardId).emit("taskChanged", {
-          type,
-          task,
-          taskId: task?._id || undefined,
-        });
-      }
+    // Join board room
+    socket.on("joinBoard", (boardId) => {
+      console.log(`Socket ${socket.id} joined board ${boardId}`);
+
+      if (boardId) socket.join(boardId);
+    });
+
+    // Leave board room
+    socket.on("leaveBoard", (boardId) => {
+      if (boardId) socket.leave(boardId);
     });
   });
 
   return io;
 }
 
-module.exports = setupSocket;
+// Helper to emit socket events from anywhere in the server
+function emitToBoard(boardId, event, payload) {
+  if (!io) return;
+  io.to(boardId).emit(event, payload);
+}
+
+function emitToUser(userId, event, payload) {
+  if (!io) return;
+  io.to(userId.toString()).emit(event, payload);
+}
+
+module.exports = { setupSocket, emitToBoard, emitToUser };

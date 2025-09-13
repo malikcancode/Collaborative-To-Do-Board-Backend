@@ -17,17 +17,18 @@ const requireBoardRole = (allowedRoles = []) => {
       );
       if (!board) return res.status(404).json({ message: "Board not found" });
 
-      // find membership for current user
-      const membership = board.members.find(
-        (m) => m.user && m.user._id.toString() === req.user._id.toString()
-      );
+      // ✅ Support both populated and non-populated members
+      const membership = board.members.find((m) => {
+        const memberId =
+          typeof m.user === "object" && m.user._id
+            ? m.user._id.toString()
+            : m.user.toString();
+
+        return memberId === req.user._id.toString();
+      });
 
       if (!membership)
         return res.status(403).json({ message: "Not a member of this board" });
-
-      // console.log("Board members:", board.members);
-      // console.log("Current user:", req.user._id);
-      // console.log("Membership found:", membership);
 
       if (!allowedRoles.includes(membership.role)) {
         return res
