@@ -15,8 +15,9 @@ const taskSchema = new mongoose.Schema(
     title: { type: String, required: true },
     description: { type: String },
     deadline: { type: Date },
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     attachment: { type: String },
-    position: { type: Number, required: true }, 
+    position: { type: Number, required: true },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

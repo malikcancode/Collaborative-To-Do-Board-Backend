@@ -1,6 +1,7 @@
 const Task = require("../models/Task");
+const Notification = require("../models/Notification");
+const Board = require("../models/Board");
 
-// Create Task
 const createTask = async (req, res) => {
   try {
     const { title, description, deadline, attachment, listId } = req.body;
@@ -8,9 +9,11 @@ const createTask = async (req, res) => {
 
     if (!listId) return res.status(400).json({ message: "listId is required" });
 
+    // Find last task for position
     const lastTask = await Task.findOne({ listId }).sort("-position");
     const position = lastTask ? lastTask.position + 1 : 0;
 
+    // Create the task
     const task = await Task.create({
       boardId,
       listId,
@@ -22,15 +25,42 @@ const createTask = async (req, res) => {
       createdBy: req.user._id,
     });
 
+    // ✅ Send response immediately
     res.status(201).json(task);
 
+    // ✅ Get board with members populated
+    const board = await Board.findById(boardId).populate("members.user");
+
     const io = req.app.get("io");
-    if (io)
+
+    if (board && io) {
+      // Loop through members (skip creator)
+      for (const member of board.members) {
+        const memberId = member.user._id.toString();
+        if (memberId === req.user._id.toString()) continue;
+
+        // Create a notification for this member
+        const notification = await Notification.create({
+          user: memberId,
+          title: `📌 Task: ${task.title}`,
+          boardId,
+          message: `A new task <b>"${task.title}"</b> was added to the board <b>"${req.board.name}"</b>.`,
+          description: task.description || "No description provided",
+          deadline: task.deadline,
+          taskId: task._id,
+        });
+
+        // Send real-time event to this member
+        io.to(memberId).emit("deadlineReminder", notification);
+      }
+
+      // Broadcast task change to the whole board room
       io.to(boardId.toString()).emit("taskChanged", {
         type: "created",
         task,
         taskId: task._id,
       });
+    }
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error" });
@@ -39,8 +69,6 @@ const createTask = async (req, res) => {
 
 // Update Task
 const updateTask = async (req, res) => {
-  console.log("[SERVER] updateTask called:", req.params.taskId, req.body);
-
   try {
     const { title, description, deadline, attachment, listId, position } =
       req.body;
@@ -51,7 +79,7 @@ const updateTask = async (req, res) => {
     });
     if (!task) return res.status(404).json({ message: "Task not found" });
 
-    // Handle position changes (same as before)
+    // Handle position changes
     const oldPosition = task.position;
 
     if (listId && listId !== task.listId.toString()) {
@@ -93,19 +121,39 @@ const updateTask = async (req, res) => {
     if (description !== undefined) task.description = description;
     if (deadline !== undefined) task.deadline = deadline;
     if (attachment !== undefined) task.attachment = attachment;
-    console.log("[SERVER] task updated:", task);
 
     await task.save();
     res.json(task);
 
     const io = req.app.get("io");
-    if (io) console.log("[SERVER] emitting socket event taskChanged", task._id);
 
-    io.to(req.board._id.toString()).emit("taskChanged", {
-      type: "updated",
-      task,
-      taskId: task._id,
-    });
+    // ✅ Notify board members about update
+    const board = await Board.findById(req.board._id).populate("members.user");
+
+    if (board && io) {
+      for (const member of board.members) {
+        const memberId = member.user._id.toString();
+        if (memberId === req.user._id.toString()) continue;
+
+        const notification = await Notification.create({
+          user: memberId,
+          title: `✏️ Task Updated: ${task.title}`,
+          boardId: board._id,
+          message: `The task <b>"${task.title}"</b> was updated on the board <b>"${req.board.name}"</b>.`,
+          description: task.description || "No description provided",
+          deadline: task.deadline,
+          taskId: task._id,
+        });
+
+        io.to(memberId).emit("deadlineReminder", notification);
+      }
+
+      io.to(board._id.toString()).emit("taskChanged", {
+        type: "updated",
+        task,
+        taskId: task._id,
+      });
+    }
   } catch (error) {
     console.error("[SERVER ERROR in updateTask]:", error);
     res.status(500).json({ message: "Server error" });

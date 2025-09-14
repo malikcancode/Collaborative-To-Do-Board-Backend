@@ -19,6 +19,7 @@ app.use(
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/boards", require("./routes/boardRoutes"));
 app.use("/api/boards/:id/tasks", require("./routes/taskRoutes"));
+app.use("/api/notifications", require("./routes/notificationRoutes"));
 
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () =>
@@ -29,3 +30,4 @@ const server = app.listen(PORT, () =>
 const { setupSocket } = require("./socket");
 const io = setupSocket(server);
 app.set("io", io);
+require("./cron");
