@@ -2,23 +2,43 @@ const Board = require("../models/Board");
 const User = require("../models/User");
 const nodemailer = require("nodemailer");
 const Task = require("../models/Task");
+const mongoose = require("mongoose");
+const { emitToBoard } = require("../socket"); // import emit function
+const Notification = require("../models/Notification");
 
 // controllers/boardController.js
 
 const createBoard = async (req, res) => {
   try {
+    const userId = new mongoose.Types.ObjectId(req.user._id);
+
     // Check if this user already belongs to a board
-    const existing = await Board.findOne({ "members.user": req.user._id });
+    const existing = await Board.findOne({ "members.user": userId });
+
     if (existing) {
-      return res
-        .status(403)
-        .json({ message: "Members cannot create new boards" });
+      // Find the role of the current user
+      const member = existing.members.find(
+        (m) => m.user.toString() === userId.toString()
+      );
+
+      if (member.role === "admin") {
+        return res
+          .status(403)
+          .json({ message: "Exit from the current board first" });
+      } else if (member.role === "member") {
+        return res
+          .status(403)
+          .json({ message: "Members cannot create new boards" });
+      } else {
+        // fallback
+        return res.status(403).json({ message: "Cannot create board" });
+      }
     }
 
     // Create board & assign user as admin
     const board = await Board.create({
       name: req.body.name,
-      members: [{ user: req.user._id, role: "admin" }],
+      members: [{ user: userId, role: "admin" }],
     });
 
     res.status(201).json(board);
@@ -41,6 +61,24 @@ const getBoards = async (req, res) => {
   }
 };
 
+// GET /api/boards/:id
+const getBoardById = async (req, res) => {
+  try {
+    const board = await Board.findById(req.params.id)
+      .populate("members.user", "username email")
+      .populate("lists.createdBy", "username email");
+
+    if (!board) {
+      return res.status(404).json({ message: "Board not found" });
+    }
+
+    res.json(board);
+  } catch (error) {
+    console.error("Error fetching board:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 // POST /api/boards/:id/invite  (protected by requireBoardRole(["admin"]))
 const inviteUser = async (req, res) => {
   try {
@@ -52,13 +90,27 @@ const inviteUser = async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    // Check if already a member
+
+    // Check if user is already an admin of another board
+    const adminBoard = await Board.findOne({
+      "members.user": user._id,
+      "members.role": "admin",
+    });
+
+    if (adminBoard) {
+      return res.status(403).json({
+        message: `${user.username} is already an admin of another board: ${adminBoard.name}`,
+      });
+    }
+
+    // Check if already a member of this board
     const alreadyMember = board.members.some(
       (m) => m.user && m.user._id.toString() === user._id.toString()
     );
     if (alreadyMember)
       return res.status(400).json({ message: "User already a member" });
 
+    // Add user as member
     board.members.push({ user: user._id, role: "member" });
     await board.save();
     await board.populate("members.user", "username email");
@@ -78,7 +130,7 @@ const inviteUser = async (req, res) => {
 
     const mailOptions = {
       from: process.env.MAIL_USER,
-      to: user.email, // or use 'email' from req.body if provided
+      to: user.email,
       subject: `Invitation to join board: ${board.name}`,
       text: `Hello ${user.username},\n\nYou have been invited to join the board "${board.name}".\n\nLogin to view the board.\n`,
     };
@@ -87,6 +139,7 @@ const inviteUser = async (req, res) => {
 
     res.json(board);
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -161,7 +214,11 @@ const deleteBoard = async (req, res) => {
     }
     // Delete all tasks associated with this board
     await Task.deleteMany({ board: board._id });
+
     await board.deleteOne();
+
+    emitToBoard(board._id, "boardDeleted", { boardId: board._id });
+
     res.json({ message: "Board and related tasks deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: "Server error" });
@@ -261,6 +318,28 @@ const updateListsOrder = async (req, res) => {
   }
 };
 
+const deleteNotification = async (req, res) => {
+  try {
+    const notificationId = req.params.id;
+
+    const notification = await Notification.findOne({
+      _id: notificationId,
+      user: req.user._id, // ensure user can delete only own notifications
+    });
+
+    if (!notification) {
+      return res.status(404).json({ message: "Notification not found" });
+    }
+
+    await notification.deleteOne();
+
+    res.json({ message: "Notification deleted successfully", notificationId });
+  } catch (err) {
+    console.error("Error deleting notification:", err);
+    res.status(500).json({ message: "Failed to delete notification" });
+  }
+};
+
 module.exports = {
   createBoard,
   getBoards,
@@ -271,4 +350,6 @@ module.exports = {
   deleteList,
   updateListsOrder,
   exitBoard,
+  getBoardById,
+  deleteNotification,
 };
