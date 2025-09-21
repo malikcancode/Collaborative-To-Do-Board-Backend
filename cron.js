@@ -1,27 +1,31 @@
-const cron = require("node-cron");
+const cron = require("node-cron"); // ✅ add this
 const Task = require("./models/Task");
 const Notification = require("./models/Notification");
 const { emitToUser, emitToBoard } = require("./socket");
 
-// Run every minute
 cron.schedule("* * * * *", async () => {
   const now = new Date();
-  const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+  const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+  console.log("[CRON RUNNING]", now.toLocaleTimeString());
 
   try {
-    // Find tasks with deadline within the next hour
     const upcomingTasks = await Task.find({
-      deadline: { $gte: now, $lte: oneHourLater },
+      deadline: { $gte: now, $lte: next24Hours },
     }).populate("assignedTo");
 
+    console.log("[CRON] Upcoming Tasks:", upcomingTasks.length);
+
     for (const task of upcomingTasks) {
-      // Create message
       const message = `Task "${
         task.title
       }" is due at ${task.deadline.toLocaleTimeString()}`;
 
-      // 1️⃣ Emit to assigned user if exists
       if (task.assignedTo) {
+        console.log(
+          `[CRON] Emitting to user: ${task.assignedTo._id}`,
+          task.title
+        );
         emitToUser(task.assignedTo._id, "deadlineReminder", {
           taskId: task._id,
           title: task.title,
@@ -30,7 +34,6 @@ cron.schedule("* * * * *", async () => {
           message,
         });
 
-        // Save notification in DB
         await Notification.create({
           user: task.assignedTo._id,
           boardId: task.boardId,
@@ -40,7 +43,7 @@ cron.schedule("* * * * *", async () => {
         });
       }
 
-      // 2️⃣ Optionally emit to board room for all members
+      console.log(`[CRON] Emitting to board: ${task.boardId}`, task.title);
       emitToBoard(task.boardId, "deadlineReminder", {
         taskId: task._id,
         title: task.title,
