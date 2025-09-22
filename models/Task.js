@@ -23,6 +23,9 @@ const taskSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    completed: { type: Boolean, default: false },
+    completedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    completedAt: { type: Date },
   },
   { timestamps: true }
 );

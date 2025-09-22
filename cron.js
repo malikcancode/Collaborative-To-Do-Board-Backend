@@ -5,7 +5,7 @@ const { emitToUser, emitToBoard } = require("./socket");
 
 cron.schedule("* * * * *", async () => {
   const now = new Date();
-  const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const next24Hours = new Date(Date.now() + 5 * 60 * 1000);
 
   console.log("[CRON RUNNING]", now.toLocaleTimeString());
 
@@ -15,18 +15,16 @@ cron.schedule("* * * * *", async () => {
     }).populate("assignedTo");
 
     console.log("[CRON] Upcoming Tasks:", upcomingTasks.length);
-
     for (const task of upcomingTasks) {
-      const message = `Task "${
-        task.title
-      }" is due at ${task.deadline.toLocaleTimeString()}`;
+      const board = await Board.findById(task.boardId).populate("members.user");
 
-      if (task.assignedTo) {
-        console.log(
-          `[CRON] Emitting to user: ${task.assignedTo._id}`,
+      for (const member of board.members) {
+        const memberId = member.user._id.toString();
+        const message = `Task "${
           task.title
-        );
-        emitToUser(task.assignedTo._id, "deadlineReminder", {
+        }" is due at ${task.deadline.toLocaleTimeString()}`;
+
+        emitToUser(memberId, "deadlineReminder", {
           taskId: task._id,
           title: task.title,
           deadline: task.deadline,
@@ -35,7 +33,7 @@ cron.schedule("* * * * *", async () => {
         });
 
         await Notification.create({
-          user: task.assignedTo._id,
+          user: memberId,
           boardId: task.boardId,
           taskId: task._id,
           title: task.title,
@@ -43,7 +41,7 @@ cron.schedule("* * * * *", async () => {
         });
       }
 
-      console.log(`[CRON] Emitting to board: ${task.boardId}`, task.title);
+      // Optional board emit
       emitToBoard(task.boardId, "deadlineReminder", {
         taskId: task._id,
         title: task.title,

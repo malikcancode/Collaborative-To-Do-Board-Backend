@@ -4,6 +4,7 @@ const generateToken = require("../utils/generateToken");
 // Register
 const register = async (req, res) => {
   const { username, email, password } = req.body;
+  console.log("Register data:", req.body);
 
   try {
     const userExists = await User.findOne({ email });
@@ -24,7 +25,7 @@ const register = async (req, res) => {
       });
     }
   } catch (error) {
-    console.error(error); // log actual error
+    console.error("User creation error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
